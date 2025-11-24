@@ -3,7 +3,7 @@ from chimera.core.lock import lock
 from chimera.interfaces.camera import CCD, ReadoutMode, CameraStatus
 from chimera.instruments.camera import CameraBase
 import numpy as np
-from qhy600driver import QHY600Driver
+from qhy600mdriver import QHY600MDriver
 import datetime as dt
 import time
 
@@ -43,9 +43,13 @@ class QHY600(CameraBase):
         readout_mode.pixel_width = 3.76
         readout_mode.pixel_height = 3.76
         self._readout_modes = {self._current_ccd: {self._current_readout_mode: readout_mode}}
+        # TODO initialize the actual camera driver
+        #self.drv = QHY600MDriver()
     
     def __start__(self):
-        self.drv = QHY600Driver()
+        # TODO open the actual camera
+        #self.drv.open()
+        pass
     
     def is_cooling(self):
         return False #TODO
@@ -96,7 +100,6 @@ class QHY600(CameraBase):
         t = 0
         self._last_frame_start = dt.datetime.utcnow()
         while t < image_request["exptime"]:
-            # [ABORT POINT]
             if self.abort.is_set():
                 status = CameraStatus.ABORTED
                 break
