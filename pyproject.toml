@@ -1,11 +1,12 @@
 [project]
-name = "chimera-template"
+name = "chimera-qhy600"
 version = "0.1.0"
 description = "Template for chimera plugins"
 license = "GPL-2.0-or-later"
 authors = [
     { name = "William Schoenell", email = "wschoenell@gmail.com" },
     { name = "Paulo Henrique Silva", email = "ph.silva@gmail.com" },
+    { name = "Viliam Dias", email = "viliamjr@gmail.com" },
 ]
 readme = "README.md"
 requires-python = ">=3.13"
