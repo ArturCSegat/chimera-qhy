@@ -43,13 +43,15 @@ class QHY600(CameraBase):
         readout_mode.pixel_width = 3.76
         readout_mode.pixel_height = 3.76
         self._readout_modes = {self._current_ccd: {self._current_readout_mode: readout_mode}}
-        # TODO initialize the actual camera driver
-        #self.drv = QHY600MDriver()
+        self.drv = QHY600MDriver()
     
+    @lock
     def __start__(self):
-        # TODO open the actual camera
-        #self.drv.open()
-        pass
+        self.drv.open()
+
+    @lock
+    def __stop__(self):
+        self.drv.close()
     
     def is_cooling(self):
         return False #TODO
@@ -93,10 +95,8 @@ class QHY600(CameraBase):
 
         status = CameraStatus.OK
         
-        #TODO start exposure on the actual camera
-        # something like: self.drv.startExposure(self.ccd, int(imageRequest["exptime"] * 100), shutter)
-        # Temporary to simulate exposure time:
-        # +++++++++++++++++++++++++++++++++++++
+        self.drv.start_exposure(int(image_request["exptime"]))
+
         t = 0
         self._last_frame_start = dt.datetime.utcnow()
         while t < image_request["exptime"]:
@@ -106,7 +106,6 @@ class QHY600(CameraBase):
 
             time.sleep(0.1)
             t += 0.1
-        # +++++++++++++++++++++++++++++++++++++
 
         self.expose_complete(image_request, status)
 
@@ -117,13 +116,11 @@ class QHY600(CameraBase):
 
         self.readout_begin(image_request)
         
-        img = np.zeros((height, width), np.int32)
+        #img = np.zeros((height, width), np.int32)
         #img = self.get_fake_image(width, height)
-
-        #TODO read the image from the actual camera
-        #
-        # Something like: self.drv.startReadout(self.ccd, mode.mode, (top, left, width, height))
-        #
+        img = self.drv.start_readout(mode.mode, top, left, width, height)
+        
+        # TODO
         # If the readout fails: CameraStatus.ABORTED
         # If it works save the image and then: CameraStatus.OK
         
@@ -145,10 +142,10 @@ class QHY600(CameraBase):
         with open('/home/vlm/tmp/imagem_via_SDK_byte-array.raw', 'rb') as raw_file:
             raw_data = raw_file.read()
 
-        # Converte para array numpy
+        # Convert the byte data to a NumPy array
         image_array = np.frombuffer(raw_data, dtype=np.uint16)
 
-        # Redimensiona para as dimensões do sensor
+        # Reshape the array to the CCD dimensions
         try:
             img = image_array.reshape((height, width))
         except ValueError:
