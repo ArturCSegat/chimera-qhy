@@ -71,7 +71,8 @@ class QHY600MDriver:
         self.qhyccd.SetQHYCCDParam.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_double]
 
         self.qhyccd.SetQHYCCDParam(self.camera_handle, ctypes.c_int(6), self.gain)
-        self.qhyccd.SetQHYCCDParam(self.camera_handle, ctypes.c_int(8), self.exposure_time)
+        result = self.qhyccd.SetQHYCCDParam(self.camera_handle, ctypes.c_int(8), self.exposure_time)
+        print(f"### SetQHYCCDParam(CONTROL_EXPOSURE) - result: {result} | exptime: {self.exposure_time.value} us")
         self.qhyccd.SetQHYCCDResolution(self.camera_handle, ctypes.c_uint32(0), ctypes.c_uint32(0), self.maxImageSizeX, self.maxImageSizeY)
         self.qhyccd.SetQHYCCDBinMode(self.camera_handle, ctypes.c_uint32(1), ctypes.c_uint32(1))
         
@@ -96,17 +97,13 @@ class QHY600MDriver:
             ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32),
             ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32),
             ctypes.POINTER(ctypes.c_uint8)]
-        
-        print("### DEBUG antes")
 
         result = self.qhyccd.GetQHYCCDSingleFrame(
             self.camera_handle, ctypes.byref(w), ctypes.byref(h),
             ctypes.byref(b), ctypes.byref(c), image_data,
         )
 
-        print(f"### DEBUG depois: w: {w.value} | h: {h.value} | b: {b.value} | c: {c.value}")
-
-        print(f"### GetQHYCCDSingleFrame() - result: {result}")
+        print(f"### GetQHYCCDSingleFrame() - result: {result} | w: {w.value} | h: {h.value} | b: {b.value} | c: {c.value}")
 
         img_size = w.value * h.value * c.value * (b.value // 8)
         img = np.ctypeslib.as_array(image_data, shape=(img_size,))
