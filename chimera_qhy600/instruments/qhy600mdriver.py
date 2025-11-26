@@ -111,3 +111,8 @@ class QHY600MDriver:
 
         print("### start_readout END")        
         return img
+
+    def get_temperature(self):
+        temp = self.qhyccd.GetQHYCCDParam(self.camera_handle, ctypes.c_int(14))
+        print(f"### get_temperature() - temp: {temp} °C")
+        return temp

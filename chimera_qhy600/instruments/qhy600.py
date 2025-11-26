@@ -54,14 +54,14 @@ class QHY600(CameraBase):
         self.drv.close()
     
     def is_cooling(self):
-        return False #TODO
+        return False
     
     def is_fanning(self):
         return False #TODO
 
     @lock
     def get_temperature(self):
-        return 0.0 #TODO
+        return self.drv.get_temperature()
     
     def supports(self, feature=None):
         return False #TODO
