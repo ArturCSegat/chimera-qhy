@@ -13,6 +13,8 @@ class QHY600MDriver:
         self.exposure_time = ctypes.c_double(1000000)
         self.bpp = ctypes.c_uint32(16)
         self.bin_factor = ctypes.c_uint32(1)
+        self.image_width = ctypes.c_uint32(0)
+        self.image_height = ctypes.c_uint32(0)
 
     def open(self):
         result = self.qhyccd.InitQHYCCDResource()
@@ -38,22 +40,21 @@ class QHY600MDriver:
         self.qhyccd.SetQHYCCDStreamMode(self.camera_handle, ctypes.c_uint32(0))
         self.qhyccd.InitQHYCCD(self.camera_handle)
 
-        chipWidthMM = ctypes.c_uint32(0)
-        chipHeightMM = ctypes.c_uint32(0)
-        self.maxImageSizeX = ctypes.c_uint32(0)
-        self.maxImageSizeY = ctypes.c_uint32(0)
-        pixelWidthUM = ctypes.c_uint32(0)
-        pixelHeightUM = ctypes.c_uint32(0)
+        chip_width_mm = ctypes.c_uint32(0)
+        chip_height_mm = ctypes.c_uint32(0)
+        pixel_width_um = ctypes.c_uint32(0)
+        pixel_height_um = ctypes.c_uint32(0)
         bpp = ctypes.c_uint32(0)
         result = self.qhyccd.GetQHYCCDChipInfo(
-            self.camera_handle, ctypes.byref(chipWidthMM), ctypes.byref(chipHeightMM), ctypes.byref(self.maxImageSizeX),
-            ctypes.byref(self.maxImageSizeY), ctypes.byref(pixelWidthUM), ctypes.byref(pixelHeightUM),
+            self.camera_handle, ctypes.byref(chip_width_mm), ctypes.byref(chip_height_mm), ctypes.byref(self.image_width),
+            ctypes.byref(self.image_height), ctypes.byref(pixel_width_um), ctypes.byref(pixel_height_um),
             ctypes.byref(bpp),
         )
-        print(f"### GetQHYCCDChipInfo() - result: {result} | Camera info: {[
-            chipWidthMM.value, chipHeightMM.value, self.maxImageSizeX.value, self.maxImageSizeY.value,
-            pixelWidthUM.value, pixelHeightUM.value, bpp.value
-        ]}")
+        print(f"### GetQHYCCDChipInfo() - result: {result}")
+        print(f"###   Chip: {chip_width_mm.value}x{chip_height_mm.value} mm")
+        print(f"###   Image: {self.image_width.value}x{self.image_height.value} pixels")
+        print(f"###   Pixel: {pixel_width_um.value}x{pixel_height_um.value} um")
+        print(f"###   BPP: {bpp.value}")
     
     def close(self):
         # TODO stop exposure is needed?!
@@ -74,7 +75,7 @@ class QHY600MDriver:
         self.qhyccd.SetQHYCCDParam(self.camera_handle, ctypes.c_int(6), self.gain)
         result = self.qhyccd.SetQHYCCDParam(self.camera_handle, ctypes.c_int(8), self.exposure_time)
         print(f"### SetQHYCCDParam(CONTROL_EXPOSURE) - result: {result} | exptime: {self.exposure_time.value} us")
-        self.qhyccd.SetQHYCCDResolution(self.camera_handle, ctypes.c_uint32(0), ctypes.c_uint32(0), self.maxImageSizeX, self.maxImageSizeY)
+        self.qhyccd.SetQHYCCDResolution(self.camera_handle, ctypes.c_uint32(0), ctypes.c_uint32(0), self.image_width, self.image_height)
         self.qhyccd.SetQHYCCDBinMode(self.camera_handle, self.bin_factor, self.bin_factor)
         
         self.qhyccd.ExpQHYCCDSingleFrame(self.camera_handle)
@@ -87,11 +88,11 @@ class QHY600MDriver:
         print("### start_readout INIT")
         # TODO ignoring mode for now: SetQHYCCDStreamMode could be used again?
         # TODO ignoring top and left for now
-        w = ctypes.c_uint32()
-        h = ctypes.c_uint32()
-        b = ctypes.c_uint32()
-        c = ctypes.c_uint32()
-        length = (self.maxImageSizeX.value // self.bin_factor.value) * (self.maxImageSizeY.value // self.bin_factor.value) * (self.bpp.value // 8)
+        width = ctypes.c_uint32()
+        height = ctypes.c_uint32()
+        bpp = ctypes.c_uint32()
+        channel = ctypes.c_uint32()
+        length = (self.image_width.value // self.bin_factor.value) * (self.image_height.value // self.bin_factor.value) * (self.bpp.value // 8)
         image_data = (ctypes.c_ubyte * length)()
 
         self.qhyccd.GetQHYCCDSingleFrame.argtypes = [ctypes.c_void_p, 
@@ -100,15 +101,15 @@ class QHY600MDriver:
             ctypes.POINTER(ctypes.c_uint8)]
 
         result = self.qhyccd.GetQHYCCDSingleFrame(
-            self.camera_handle, ctypes.byref(w), ctypes.byref(h),
-            ctypes.byref(b), ctypes.byref(c), image_data,
+            self.camera_handle, ctypes.byref(width), ctypes.byref(height),
+            ctypes.byref(bpp), ctypes.byref(channel), image_data,
         )
 
-        print(f"### GetQHYCCDSingleFrame() - result: {result} | w: {w.value} | h: {h.value} | b: {b.value} | c: {c.value}")
+        print(f"### GetQHYCCDSingleFrame() - result: {result} | width: {width.value} | height: {height.value} | bpp: {bpp.value} | channel: {channel.value}")
 
-        img_size = w.value * h.value * c.value * (b.value // 8)
+        img_size = width.value * height.value * channel.value * (bpp.value // 8)
         img = np.ctypeslib.as_array(image_data, shape=(img_size,))
-        img = img.view(np.uint16).reshape((h.value, w.value))
+        img = img.view(np.uint16).reshape((height.value, width.value))
 
         print("### start_readout END")        
         return img
