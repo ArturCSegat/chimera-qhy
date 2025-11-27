@@ -1,5 +1,4 @@
 import ctypes
-import time
 
 import numpy as np
 
@@ -44,17 +43,16 @@ class QHY600MDriver:
         chip_height_mm = ctypes.c_uint32(0)
         pixel_width_um = ctypes.c_uint32(0)
         pixel_height_um = ctypes.c_uint32(0)
-        bpp = ctypes.c_uint32(0)
         result = self.qhyccd.GetQHYCCDChipInfo(
             self.camera_handle, ctypes.byref(chip_width_mm), ctypes.byref(chip_height_mm), ctypes.byref(self.image_width),
             ctypes.byref(self.image_height), ctypes.byref(pixel_width_um), ctypes.byref(pixel_height_um),
-            ctypes.byref(bpp),
+            ctypes.byref(self.bpp),
         )
         print(f"### GetQHYCCDChipInfo() - result: {result}")
         print(f"###   Chip: {chip_width_mm.value}x{chip_height_mm.value} mm")
         print(f"###   Image: {self.image_width.value}x{self.image_height.value} pixels")
         print(f"###   Pixel: {pixel_width_um.value}x{pixel_height_um.value} um")
-        print(f"###   BPP: {bpp.value}")
+        print(f"###   BPP: {self.bpp.value}")
     
     def close(self):
         # TODO stop exposure is needed?!
