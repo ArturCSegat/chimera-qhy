@@ -73,8 +73,12 @@ class QHY600MDriver:
         self.qhyccd.SetQHYCCDParam(self.camera_handle, ctypes.c_int(6), self.gain)
         result = self.qhyccd.SetQHYCCDParam(self.camera_handle, ctypes.c_int(8), self.exposure_time)
         print(f"### SetQHYCCDParam(CONTROL_EXPOSURE) - result: {result} | exptime: {self.exposure_time.value} us")
-        self.qhyccd.SetQHYCCDResolution(self.camera_handle, ctypes.c_uint32(0), ctypes.c_uint32(0), self.image_width, self.image_height)
+
         self.qhyccd.SetQHYCCDBinMode(self.camera_handle, self.bin_factor, self.bin_factor)
+
+        self.image_width = ctypes.c_uint32(self.image_width.value // self.bin_factor.value)
+        self.image_height = ctypes.c_uint32(self.image_height.value // self.bin_factor.value)
+        self.qhyccd.SetQHYCCDResolution(self.camera_handle, ctypes.c_uint32(0), ctypes.c_uint32(0), self.image_width, self.image_height)
         
         self.qhyccd.ExpQHYCCDSingleFrame(self.camera_handle)
         # TODO is chimera already waits simulating exposure time?!
@@ -90,7 +94,7 @@ class QHY600MDriver:
         height = ctypes.c_uint32()
         bpp = ctypes.c_uint32()
         channel = ctypes.c_uint32()
-        length = (self.image_width.value // self.bin_factor.value) * (self.image_height.value // self.bin_factor.value) * (self.bpp.value // 8)
+        length = self.image_width.value * self.image_height.value * (self.bpp.value // 8)
         image_data = (ctypes.c_ubyte * length)()
 
         self.qhyccd.GetQHYCCDSingleFrame.argtypes = [ctypes.c_void_p, 
