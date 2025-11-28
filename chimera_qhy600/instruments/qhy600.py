@@ -43,7 +43,7 @@ class QHY600(CameraBase):
         readout_mode.pixel_width = 3.76
         readout_mode.pixel_height = 3.76
         self._readout_modes = {self._current_ccd: {self._current_readout_mode: readout_mode}}
-        self.drv = QHY600MDriver()
+        self.drv = QHY600MDriver(self.log)
     
     @lock
     def __start__(self):
