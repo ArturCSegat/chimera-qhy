@@ -1,11 +1,13 @@
-from chimera.core.event import event
-from chimera.core.lock import lock
-from chimera.interfaces.camera import CCD, ReadoutMode, CameraStatus
-from chimera.instruments.camera import CameraBase
-import numpy as np
-from qhy600mdriver import QHY600MDriver
 import datetime as dt
 import time
+
+import numpy as np
+from chimera.core.event import event
+from chimera.core.lock import lock
+from chimera.instruments.camera import CameraBase
+from chimera.interfaces.camera import CCD, CameraStatus, ReadoutMode
+from qhy600mdriver import QHY600MDriver
+
 
 class QHY600(CameraBase):
     """QHY600 camera as a Chimera instrument."""
@@ -19,7 +21,7 @@ class QHY600(CameraBase):
 
     def __init__(self):
         super().__init__()
-        self["device"] = 'USB'
+        self["device"] = "USB"
         self._current_ccd = 1 << 1
         self._current_adc = 1 << 2
         self._current_readout_mode = 1 << 3
@@ -34,7 +36,7 @@ class QHY600(CameraBase):
         }
         self._last_frame_start = 0
 
-        #TODO reference: https://www.qhyccd.com/astronomical-camera-qhy600/#:~:text=Readout%20Mode%20%230%20(Photographic%20Mode)
+        # TODO reference: https://www.qhyccd.com/astronomical-camera-qhy600/#:~:text=Readout%20Mode%20%230%20(Photographic%20Mode)
         readout_mode = ReadoutMode()
         readout_mode.mode = 0
         readout_mode.gain = 10
@@ -42,9 +44,11 @@ class QHY600(CameraBase):
         readout_mode.height = 6422
         readout_mode.pixel_width = 3.76
         readout_mode.pixel_height = 3.76
-        self._readout_modes = {self._current_ccd: {self._current_readout_mode: readout_mode}}
+        self._readout_modes = {
+            self._current_ccd: {self._current_readout_mode: readout_mode}
+        }
         self.drv = QHY600MDriver(self.log)
-    
+
     @lock
     def __start__(self):
         self.drv.open()
@@ -52,41 +56,44 @@ class QHY600(CameraBase):
     @lock
     def __stop__(self):
         self.drv.close()
-    
+
     def is_cooling(self):
         return False
-    
+
     def is_fanning(self):
-        return False #TODO
+        return False  # TODO
 
     @lock
     def get_temperature(self):
         return self.drv.get_temperature()
-    
+
     def supports(self, feature=None):
-        return False #TODO
-    
+        return False  # TODO
+
     def get_ccds(self):
         return self._ccds
-    
+
     def get_current_ccd(self):
         return self._current_ccd
-    
+
     def get_adcs(self):
         return self._adcs
-    
+
     def get_physical_size(self):
         return (self["ccd_width"], self["ccd_height"])
-    
+
     def get_pixel_size(self):
         return (self["pixel_width"], self["pixel_height"])
-    
+
     def get_overscan_size(self, ccd=None):
-        return (0, 0) #TODO is it possible to set this value in the QHY600? Because it returned 0 x 0 in the SDK.
-    
+        return (
+            0,
+            0,
+        )  # TODO is it possible to set this value in the QHY600? Because it returned 0 x 0 in the SDK.
+
     def get_binnings(self):
         return self._binnings
-    
+
     def get_readout_modes(self):
         return self._readout_modes
 
@@ -94,7 +101,7 @@ class QHY600(CameraBase):
         self.expose_begin(image_request)
 
         status = CameraStatus.OK
-        
+
         self.drv.start_exposure(int(image_request["exptime"]))
 
         t = 0
@@ -115,15 +122,15 @@ class QHY600(CameraBase):
         )
 
         self.readout_begin(image_request)
-        
-        #img = np.zeros((height, width), np.int32)
-        #img = self.get_fake_image(width, height)
+
+        # img = np.zeros((height, width), np.int32)
+        # img = self.get_fake_image(width, height)
         img = self.drv.start_readout(mode.mode, top, left, width, height)
-        
+
         # TODO
         # If the readout fails: CameraStatus.ABORTED
         # If it works save the image and then: CameraStatus.OK
-        
+
         proxy = self._save_image(
             image_request,
             img,
@@ -139,7 +146,7 @@ class QHY600(CameraBase):
         return proxy
 
     def get_fake_image(self, width, height):
-        with open('/home/vlm/tmp/imagem_via_SDK_byte-array.raw', 'rb') as raw_file:
+        with open("/home/vlm/tmp/imagem_via_SDK_byte-array.raw", "rb") as raw_file:
             raw_data = raw_file.read()
 
         # Convert the byte data to a NumPy array
