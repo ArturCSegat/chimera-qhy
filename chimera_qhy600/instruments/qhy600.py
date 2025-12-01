@@ -38,7 +38,7 @@ class QHY600(CameraBase):
 
         # TODO reference: https://www.qhyccd.com/astronomical-camera-qhy600/#:~:text=Readout%20Mode%20%230%20(Photographic%20Mode)
         readout_mode = ReadoutMode()
-        readout_mode.mode = 0
+        readout_mode.mode = 1
         readout_mode.gain = 10
         readout_mode.width = 9600
         readout_mode.height = 6422

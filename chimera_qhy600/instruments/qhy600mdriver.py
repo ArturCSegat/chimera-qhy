@@ -52,7 +52,29 @@ class QHY600MDriver:
 
         self.camera_handle = self.qhyccd.OpenQHYCCD(id_object)
 
+        readout_mode_nums = ctypes.c_uint32()
+        result = self.qhyccd.GetQHYCCDNumberOfReadModes(self.camera_handle, ctypes.byref(readout_mode_nums))
+        log.info(f"GetQHYCCDNumberOfReadModes() result = {result} num = {readout_mode_nums.value}")
+
+        for index in range(readout_mode_nums.value):
+            log.info(f"Available Readout Mode: #{index}")
+
+            name_buffer = ctypes.create_string_buffer(40)
+            result = self.qhyccd.GetQHYCCDReadModeName(self.camera_handle, index, name_buffer)
+            result_name = name_buffer.value.decode("utf-8")
+            log.info(f"    GetQHYCCDReadModeName() result = {result} | name = {result_name}")
+
+            width = ctypes.c_uint32()
+            height = ctypes.c_uint32()
+            result = self.qhyccd.GetQHYCCDReadModeResolution(self.camera_handle, index, ctypes.byref(width), ctypes.byref(height))
+            log.info(f"    GetQHYCCDReadModeResolution() result = {result} | width = {width.value} height = {height.value}")
+        
+        mode = ctypes.c_uint32(1)
+        result = self.qhyccd.SetQHYCCDReadMode(self.camera_handle, mode)
+        log.info(f"SetQHYCCDReadMode() result = {result} | mode = {mode.value}")
+
         self.qhyccd.SetQHYCCDStreamMode(self.camera_handle, ctypes.c_uint32(0))
+
         self.qhyccd.InitQHYCCD(self.camera_handle)
 
         chip_width_mm = ctypes.c_uint32(0)
