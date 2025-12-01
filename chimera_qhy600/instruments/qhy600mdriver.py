@@ -1,12 +1,23 @@
 import ctypes
 import logging
+from enum import Enum
 
 import numpy as np
 
 log: logging.Logger = None
 
 
+class CONTROL_ID(Enum):
+    """Features available that could be controlled."""
+
+    GAIN = ctypes.c_int(6)
+    EXPOSURE = ctypes.c_int(8)
+    TEMPERATURE = ctypes.c_int(14)
+
+
 class QHY600MDriver:
+    """Wrapper for QHY600M SDK functions."""
+
     def __init__(self, chimera_logger: logging.Logger):
         global log
         log = chimera_logger
@@ -86,9 +97,9 @@ class QHY600MDriver:
             ctypes.c_double,
         ]
 
-        self.qhyccd.SetQHYCCDParam(self.camera_handle, ctypes.c_int(6), self.gain)
+        self.qhyccd.SetQHYCCDParam(self.camera_handle, CONTROL_ID.GAIN.value, self.gain)
         result = self.qhyccd.SetQHYCCDParam(
-            self.camera_handle, ctypes.c_int(8), self.exposure_time
+            self.camera_handle, CONTROL_ID.EXPOSURE.value, self.exposure_time
         )
         log.info(
             f"SetQHYCCDParam(CONTROL_EXPOSURE) - result: {result} | exptime: {self.exposure_time.value} us"
@@ -160,6 +171,8 @@ class QHY600MDriver:
         return img
 
     def get_temperature(self):
-        temp = self.qhyccd.GetQHYCCDParam(self.camera_handle, ctypes.c_int(14))
+        temp = self.qhyccd.GetQHYCCDParam(
+            self.camera_handle, CONTROL_ID.TEMPERATURE.value
+        )
         log.info(f"get_temperature() - temp: {temp} °C")
         return temp
