@@ -123,13 +123,13 @@ class QHY600(CameraBase):
 
         self.readout_begin(image_request)
 
-        # img = np.zeros((height, width), np.int32)
-        # img = self.get_fake_image(width, height)
-        img = self.drv.start_readout(mode.mode, top, left, width, height)
-
-        # TODO
-        # If the readout fails: CameraStatus.ABORTED
-        # If it works save the image and then: CameraStatus.OK
+        try:
+            # img = self.get_fake_image(width, height)
+            img = self.drv.start_readout(mode.mode, top, left, width, height)
+        except Exception as e:
+            self.log.error(f"Error during readout: {e}")
+            self.readout_complete(None, CameraStatus.ABORTED)
+            return None
 
         proxy = self._save_image(
             image_request,
@@ -154,10 +154,10 @@ class QHY600(CameraBase):
 
         # Reshape the array to the CCD dimensions
         try:
+            # img = np.zeros((height, width), np.int32) # placeholder for actual image data
             img = image_array.reshape((height, width))
         except ValueError:
-            # Tenta a orientação oposta se a primeira não funcionar
-            print("Tentando orientação alternativa...")
+            self.log.warning("Trying alternative orientation...")
             img = image_array.reshape((width, height)).T
 
         return img
