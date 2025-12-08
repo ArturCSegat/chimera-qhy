@@ -1,3 +1,15 @@
+Chimera QHY Repository
+=======================
+
+Repository of Chimera instruments and controllers for [QHY products](https://www.qhyccd.com/).
+
+Instruments Supported
+-------
+
+* **QHY600M**: a monochrome, back-illuminated, high-sensitivity, CMOS technology (low noise and high-speed readout), astronomical imaging camera. The QHY600PH-M uses SONY IMX455, a BSI full frame (35mm format) sensor with 3.76um pixels and native 16-bit ([product web site](https://www.qhyccd.com/astronomical-camera-qhy600/)).
+
+
+
 chimera-template plugin
 =======================
 
