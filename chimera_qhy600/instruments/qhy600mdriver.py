@@ -1,200 +1,219 @@
-import ctypes
+from __future__ import annotations
+
 import logging
-from enum import Enum
+from dataclasses import dataclass
+from typing import Optional
 
 import numpy as np
 
-log: logging.Logger = None
+from qhy600sdk import ControlId, QhyCcdSdk, QhyChipInfo, StreamMode
+from qhy600sdk_mock import QhyCcdSdkMock
 
 
-class CONTROL_ID(Enum):
-    """Features available that could be controlled."""
+@dataclass
+class Qhy600State:
+    camera_id: Optional[bytes] = None
+    camera_handle: Optional[int] = None
+    chip_info: Optional[QhyChipInfo] = None
 
-    GAIN = ctypes.c_int(6)
-    EXPOSURE = ctypes.c_int(8)
-    TEMPERATURE = ctypes.c_int(14)
+    readout_mode_index: int = 1
+    gain: float = 10.0
+    bits_per_pixel: int = 16
+
+    bin_factor: int = 1
+    roi_left: int = 0
+    roi_top: int = 0
+    roi_width: int = 0
+    roi_height: int = 0
 
 
 class QHY600MDriver:
-    """Wrapper for QHY600M SDK functions."""
+    """Driver layer (no ctypes)."""
 
-    def __init__(self, chimera_logger: logging.Logger):
-        global log
-        log = chimera_logger
-        self.qhyccd = ctypes.CDLL("/usr/local/lib/libqhyccd.so")
-        self.qhyccd.GetQHYCCDParam.restype = ctypes.c_double
-        self.qhyccd.OpenQHYCCD.restype = ctypes.POINTER(ctypes.c_uint32)
-        self.gain = ctypes.c_double(10)
-        self.exposure_time = ctypes.c_double(1000000)
-        self.bpp = ctypes.c_uint32(16)
-        self.bin_factor = ctypes.c_uint32(1)
-        self.image_width = ctypes.c_uint32(0)
-        self.image_height = ctypes.c_uint32(0)
+    def __init__(
+        self,
+        chimera_logger: logging.Logger,
+        sdk_library_path: str | None = None,
+        readout_mode_index: int = 1,
+        gain: float = 10.0,
+        *,
+        use_mock_sdk: bool = False,
+    ):
+        self.log = chimera_logger
+        self._sdk_library_path = sdk_library_path
+        self._sdk: QhyCcdSdk | QhyCcdSdkMock
+        self._use_mock_sdk = bool(use_mock_sdk)
 
-    def open(self):
-        result = self.qhyccd.InitQHYCCDResource()
-        if result == 0:
-            log.info("Init SDK Ok")
+        self.state = Qhy600State(readout_mode_index=int(readout_mode_index), gain=float(gain))
+
+    def open(self) -> None:
+        if self._use_mock_sdk:
+            self._sdk = QhyCcdSdkMock(image_width=9600, image_height=6422)  # type: ignore[assignment]
         else:
-            raise Exception("SDK not found")
+            self._sdk = QhyCcdSdk(self._sdk_library_path)
 
-        cameras_found = self.qhyccd.ScanQHYCCD()
-        if cameras_found > 0:
-            log.info("Camera OK")
-        else:
-            raise Exception("camera not found")
+        self._sdk.initialize_sdk()
 
-        position_id = 0
-        type_char_array_32 = ctypes.c_char * 32
-        id_object = type_char_array_32()
-        result = self.qhyccd.GetQHYCCDId(position_id, id_object)
-        log.info(f"GetQHYCCDId() - result: {result} | camera ID: {id_object}")
+        cameras_found = self._sdk.scan_cameras()
+        if cameras_found <= 0:
+            raise RuntimeError("No QHY cameras found")
 
-        self.camera_handle = self.qhyccd.OpenQHYCCD(id_object)
+        self.state.camera_id = self._sdk.get_camera_id(0)
+        self.log.info("QHY camera id: %s", self.state.camera_id)
 
-        readout_mode_nums = ctypes.c_uint32()
-        result = self.qhyccd.GetQHYCCDNumberOfReadModes(self.camera_handle, ctypes.byref(readout_mode_nums))
-        log.info(f"GetQHYCCDNumberOfReadModes() result = {result} num = {readout_mode_nums.value}")
+        self.state.camera_handle = self._sdk.open_camera(self.state.camera_id)
 
-        for index in range(readout_mode_nums.value):
-            log.info(f"Available Readout Mode: #{index}")
+        mode_count = self._sdk.get_readout_modes_count(self.state.camera_handle)
+        if not (0 <= self.state.readout_mode_index < mode_count):
+            raise ValueError(
+                f"Invalid readout_mode_index={self.state.readout_mode_index}; camera reports {mode_count} modes"
+            )
 
-            name_buffer = ctypes.create_string_buffer(40)
-            result = self.qhyccd.GetQHYCCDReadModeName(self.camera_handle, index, name_buffer)
-            result_name = name_buffer.value.decode("utf-8")
-            log.info(f"    GetQHYCCDReadModeName() result = {result} | name = {result_name}")
+        for idx in range(mode_count):
+            name = self._sdk.get_readout_mode_name(self.state.camera_handle, idx)
+            w, h = self._sdk.get_readout_mode_resolution(self.state.camera_handle, idx)
+            self.log.info("Readout mode %d: %s (%dx%d)", idx, name, w, h)
 
-            width = ctypes.c_uint32()
-            height = ctypes.c_uint32()
-            result = self.qhyccd.GetQHYCCDReadModeResolution(self.camera_handle, index, ctypes.byref(width), ctypes.byref(height))
-            log.info(f"    GetQHYCCDReadModeResolution() result = {result} | width = {width.value} height = {height.value}")
-        
-        mode = ctypes.c_uint32(1)
-        result = self.qhyccd.SetQHYCCDReadMode(self.camera_handle, mode)
-        log.info(f"SetQHYCCDReadMode() result = {result} | mode = {mode.value}")
+        self._sdk.set_readout_mode(self.state.camera_handle, self.state.readout_mode_index)
+        self._sdk.set_stream_mode(self.state.camera_handle, StreamMode.SINGLE_FRAME)
 
-        self.qhyccd.SetQHYCCDStreamMode(self.camera_handle, ctypes.c_uint32(0))
+        self._sdk.initialize_camera(self.state.camera_handle)
 
-        self.qhyccd.InitQHYCCD(self.camera_handle)
+        self.state.chip_info = self._sdk.get_chip_info(self.state.camera_handle)
+        self.state.bits_per_pixel = int(self.state.chip_info.bits_per_pixel) or 16
 
-        chip_width_mm = ctypes.c_uint32(0)
-        chip_height_mm = ctypes.c_uint32(0)
-        pixel_width_um = ctypes.c_uint32(0)
-        pixel_height_um = ctypes.c_uint32(0)
-        result = self.qhyccd.GetQHYCCDChipInfo(
-            self.camera_handle,
-            ctypes.byref(chip_width_mm),
-            ctypes.byref(chip_height_mm),
-            ctypes.byref(self.image_width),
-            ctypes.byref(self.image_height),
-            ctypes.byref(pixel_width_um),
-            ctypes.byref(pixel_height_um),
-            ctypes.byref(self.bpp),
-        )
-        log.info(f"GetQHYCCDChipInfo() - result: {result}")
-        log.info(f"  Chip: {chip_width_mm.value}x{chip_height_mm.value} mm")
-        log.info(f"  Image: {self.image_width.value}x{self.image_height.value} pixels")
-        log.info(f"  Pixel: {pixel_width_um.value}x{pixel_height_um.value} um")
-        log.info(f"  BPP: {self.bpp.value}")
-
-    def close(self):
-        # TODO stop exposure is needed?!
-        # self.qhyccd.CancelQHYCCDExposingAndReadout(self.camera_handle)
-        result = self.qhyccd.CloseQHYCCD(self.camera_handle)
-        log.info(f"CloseQHYCCD() - result: {result}")
-        result = self.qhyccd.ReleaseQHYCCDResource()
-        log.info(f"ReleaseQHYCCDResource() - result: {result}")
-
-    def start_exposure(self, exptime):
-        log.info(f"start_exposure() - exptime: {exptime} s")
-        self.exposure_time = ctypes.c_double(
-            exptime * 1000000
-        )  # convert seconds to microseconds
-        self.qhyccd.SetQHYCCDBitsMode(self.camera_handle, self.bpp)
-
-        self.qhyccd.SetQHYCCDParam.restype = ctypes.c_uint32
-        self.qhyccd.SetQHYCCDParam.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_int,
-            ctypes.c_double,
-        ]
-
-        self.qhyccd.SetQHYCCDParam(self.camera_handle, CONTROL_ID.GAIN.value, self.gain)
-        result = self.qhyccd.SetQHYCCDParam(
-            self.camera_handle, CONTROL_ID.EXPOSURE.value, self.exposure_time
-        )
-        log.info(
-            f"SetQHYCCDParam(CONTROL_EXPOSURE) - result: {result} | exptime: {self.exposure_time.value} us"
+        self.log.info(
+            "Chip %.2fx%.2f mm, image %dx%d px, pixel %.3fx%.3f um, %d bpp",
+            self.state.chip_info.chip_width_mm,
+            self.state.chip_info.chip_height_mm,
+            self.state.chip_info.image_width_px,
+            self.state.chip_info.image_height_px,
+            self.state.chip_info.pixel_width_um,
+            self.state.chip_info.pixel_height_um,
+            self.state.bits_per_pixel,
         )
 
-        self.qhyccd.SetQHYCCDBinMode(
-            self.camera_handle, self.bin_factor, self.bin_factor
+        # Default ROI = full frame.
+        self.state.roi_left = 0
+        self.state.roi_top = 0
+        self.state.roi_width = self.state.chip_info.image_width_px
+        self.state.roi_height = self.state.chip_info.image_height_px
+
+    def close(self) -> None:
+        if not self._sdk:
+            return
+
+        try:
+            if self.state.camera_handle:
+                self._sdk.close_camera(self.state.camera_handle)
+        finally:
+            self._sdk.shutdown_sdk()
+            self.state.camera_handle = None
+
+    def start_exposure(
+        self,
+        exptime_s: float,
+        *,
+        bin_factor: int = 1,
+        roi: tuple[int, int, int, int] | None = None,
+    ) -> None:
+        if not self._sdk or not self.state.camera_handle:
+            raise RuntimeError("Camera not open")
+
+        exptime_s = float(exptime_s)
+        exposure_us = exptime_s * 1_000_000.0
+        self.log.info("ROI RECEIVED")
+        self.log.info(roi)
+
+        self.state.bin_factor = max(1, int(bin_factor))
+
+        if roi is not None:
+            left, top, width, height = roi
+            self.state.roi_left = max(0, int(left))
+            self.state.roi_top = max(0, int(top))
+            self.state.roi_width = max(1, int(width))
+            self.state.roi_height = max(1, int(height))
+        elif self.state.chip_info:
+            self.state.roi_left = 0
+            self.state.roi_top = 0
+
+            # ROI -> area of sensor used
+            # 2x2 binning should still use full sensor, but combine to quarter smaller image
+            self.state.roi_width = self.state.chip_info.image_width_px #// self.state.bin_factor
+            self.state.roi_height = self.state.chip_info.image_height_px # // self.state.bin_factor
+
+        self.log.info(
+            "Starting exposure: %.3fs (bin=%dx%d, roi=%d,%d %dx%d)",
+            exptime_s,
+            self.state.bin_factor,
+            self.state.bin_factor,
+            self.state.roi_left,
+            self.state.roi_top,
+            self.state.roi_width,
+            self.state.roi_height,
         )
 
-        self.image_width = ctypes.c_uint32(
-            self.image_width.value // self.bin_factor.value
-        )
-        self.image_height = ctypes.c_uint32(
-            self.image_height.value // self.bin_factor.value
-        )
-        self.qhyccd.SetQHYCCDResolution(
-            self.camera_handle,
-            ctypes.c_uint32(0),
-            ctypes.c_uint32(0),
-            self.image_width,
-            self.image_height,
-        )
+        self._sdk.set_bits_per_pixel(self.state.camera_handle, self.state.bits_per_pixel)
+        self._sdk.set_parameter(self.state.camera_handle, ControlId.GAIN, self.state.gain)
+        self._sdk.set_parameter(self.state.camera_handle, ControlId.EXPOSURE_US, exposure_us)
 
-        self.qhyccd.ExpQHYCCDSingleFrame(self.camera_handle)
-        # TODO is chimera already waits simulating exposure time?!
-        # time.sleep(1)
-        log.info("start_exposure END")
-
-    def start_readout(self, mode, top, left, width, height):
-        log.info("start_readout INIT")
-        # TODO ignoring mode for now: SetQHYCCDStreamMode could be used again?
-        # TODO ignoring top and left for now
-        width = ctypes.c_uint32()
-        height = ctypes.c_uint32()
-        bpp = ctypes.c_uint32()
-        channel = ctypes.c_uint32()
-        length = (
-            self.image_width.value * self.image_height.value * (self.bpp.value // 8)
-        )
-        image_data = (ctypes.c_ubyte * length)()
-
-        self.qhyccd.GetQHYCCDSingleFrame.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(ctypes.c_uint32),
-            ctypes.POINTER(ctypes.c_uint32),
-            ctypes.POINTER(ctypes.c_uint32),
-            ctypes.POINTER(ctypes.c_uint32),
-            ctypes.POINTER(ctypes.c_uint8),
-        ]
-
-        result = self.qhyccd.GetQHYCCDSingleFrame(
-            self.camera_handle,
-            ctypes.byref(width),
-            ctypes.byref(height),
-            ctypes.byref(bpp),
-            ctypes.byref(channel),
-            image_data,
+        self._sdk.set_binning(self.state.camera_handle, self.state.bin_factor, self.state.bin_factor)
+        self._sdk.set_roi(
+            self.state.camera_handle,
+            self.state.roi_left,
+            self.state.roi_top,
+            self.state.roi_width,
+            self.state.roi_height,
         )
 
-        log.info(
-            f"GetQHYCCDSingleFrame() - result: {result} | width: {width.value} | height: {height.value} | bpp: {bpp.value} | channel: {channel.value}"
-        )
+        self._sdk.start_single_frame_exposure(self.state.camera_handle)
 
-        img_size = width.value * height.value * channel.value * (bpp.value // 8)
-        img = np.ctypeslib.as_array(image_data, shape=(img_size,))
-        img = img.view(np.uint16).reshape((height.value, width.value))
+    def start_readout(self, mode: int, top: int, left: int, width: int, height: int) -> np.ndarray:
+        """Readout the last exposed frame."""
 
-        log.info("start_readout END")
-        return img
+        if not self._sdk or not self.state.camera_handle:
+            raise RuntimeError("Camera not open")
 
-    def get_temperature(self):
-        temp = self.qhyccd.GetQHYCCDParam(
-            self.camera_handle, CONTROL_ID.TEMPERATURE.value
-        )
-        log.info(f"get_temperature() - temp: {temp} °C")
-        return temp
+        req_left = max(0, int(left))
+        req_top = max(0, int(top))
+        req_w = max(1, int(width))
+        req_h = max(1, int(height))
+
+        if (
+            req_left != self.state.roi_left
+            or req_top != self.state.roi_top
+            or req_w != self.state.roi_width
+            or req_h != self.state.roi_height
+        ):
+            self.log.warning(
+                "Requested window %d,%d %dx%d differs from configured ROI %d,%d %dx%d; "
+                "ROI is applied at exposure time",
+                req_left,
+                req_top,
+                req_w,
+                req_h,
+                self.state.roi_left,
+                self.state.roi_top,
+                self.state.roi_width,
+                self.state.roi_height,
+            )
+
+        bytes_per_pixel = max(1, self.state.bits_per_pixel // 8)
+        buffer_len = int(self.state.roi_width * self.state.roi_height * bytes_per_pixel)
+
+        frame_w, frame_h, bpp, channels, buf = self._sdk.read_single_frame(self.state.camera_handle, buffer_len)
+
+        if channels != 1:
+            raise RuntimeError(f"Unexpected channel count {channels} (this plugin is for monochrome cameras)")
+
+        dtype = np.uint16 if bpp == 16 else np.uint8
+        needed_bytes = int(frame_w * frame_h * (bpp // 8))
+        raw = memoryview(buf)[:needed_bytes]
+
+        arr = np.frombuffer(raw, dtype=dtype)
+        return arr.reshape((frame_h, frame_w))
+
+    def get_temperature(self) -> float:
+        if not self._sdk or not self.state.camera_handle:
+            raise RuntimeError("Camera not open")
+        return self._sdk.get_parameter(self.state.camera_handle, ControlId.TEMPERATURE_C)
