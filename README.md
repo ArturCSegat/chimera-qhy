@@ -1,75 +1,65 @@
-Chimera QHY Repository
-=======================
+Chimera QHY600 Plugin
+=====================
 
-Repository of Chimera instruments and controllers for [QHY products](https://www.qhyccd.com/).
+Chimera camera plugin for **QHY600M / QHY600PH-M** (Sony IMX455) cameras.
 
-Instruments Supported
--------
+Instruments supported
+---------------------
 
-* **QHY600M**: a monochrome, back-illuminated, high-sensitivity, CMOS technology (low noise and high-speed readout), astronomical imaging camera. The QHY600PH-M uses SONY IMX455, a BSI full frame (35mm format) sensor with 3.76um pixels and native 16-bit ([product web site](https://www.qhyccd.com/astronomical-camera-qhy600/)).
-
-
-
-chimera-template plugin
-=======================
-
-This is a template plugin for the chimera observatory control system
-https://github.com/astroufsc/chimera.
-
-Usage
------
-
-Rename chimera_template for your plugin name. It is important that the plugin
-name must start with chimera\_ to be found by chimera. Instruments and
-controllers must follow the standard ``chimera_(plugin_name)/(instruments|controllers)/(plugin).py``
-
-The class inside ``(plugin).py`` should be named Plugin (with CamelCase letters).
-
-For more info: https://github.com/astroufsc/chimera/blob/master/docs/site/chimerafordevs.rst#chimera-objects
-
+- **QHY600M / QHY600PH-M** (monochrome)
 
 Installation
 ------------
 
-Installation instructions. Dependencies, etc...
+From this folder:
 
-::
+```bash
+pip install -e .
+```
 
-   pip install -U chimera_template
+Requirements
+------------
 
-or
+### Real camera usage
 
-::
+You need the QHYCCD SDK installed so `libqhyccd.so` is available.
 
-    pip install -U git+https://github.com/astroufsc/chimera-template.git
+If the library is not on the system loader path, set one of these environment variables:
 
+- `QHYCCD_SDK_PATH`
+- `QHYCCD_LIB_PATH`
 
-Configuration Example
+Or provide an explicit path in the Chimera config via `sdk_library_path`.
+
+Configuration example
 ---------------------
 
-Here goes an example of the configuration to be added on ``chimera.config`` file.
+Add to your `chimera.config`:
 
-::
+```yaml
+camera:
+  type: QHY600
+  name: qhy600m
+  readout_mode_index: 1
+  gain: 10.0
+  # sdk_library_path: /usr/local/lib/libqhyccd.so
+```
 
-    instrument:
-        name: model
-        type: Example
+Local testing (no hardware)
+---------------------------
 
+For local development without the QHY SDK or a camera connected, enable the mock SDK:
 
-Tested Hardware (for instruments)
----------------------------------
+```yaml
+camera:
+  type: QHY600
+  name: qhy600m
+  use_mock_sdk: true
+```
 
-This plugin was tested on these hardware:
-
-* Hardware example 1, model 2
-* Hardware example 2, model 3
-
+This mock prints each SDK call and generates a synthetic image that changes with ROI/binning/exposure/gain.
 
 Contact
 -------
 
-For more information, contact us on chimera's discussion list:
-https://groups.google.com/forum/#!forum/chimera-discuss
-
-Bug reports and patches are welcome and can be sent over our GitHub page:
-https://github.com/astroufsc/chimera-template/
+Chimera discussion list: https://groups.google.com/forum/#!forum/chimera-discuss
