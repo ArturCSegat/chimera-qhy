@@ -21,7 +21,7 @@ class QHY600(CameraBase):
         "sdk_library_path": None,
         "readout_mode_index": 0,
         "gain": 10.0,
-        "use_mock_sdk": True,
+        "fake": False,
     }
 
     def __init__(self):
@@ -31,6 +31,13 @@ class QHY600(CameraBase):
 
         self._current_ccd = 1 << 1
         self._current_adc = 1 << 2
+
+    @lock
+    def __start__(self):
+        self.log.info("Starting QHY600 camera")
+        self.log.info(f"gain: {self["gain"]}")
+        self.log.info(f"fake: {self["fake"]}")
+
         self._current_readout_mode = self["readout_mode_index"]
 
         self._adcs = {"16 bit": self._current_adc}
@@ -53,12 +60,9 @@ class QHY600(CameraBase):
             sdk_library_path=self["sdk_library_path"],
             readout_mode_index=int(self["readout_mode_index"]),
             gain=float(self["gain"]),
-            use_mock_sdk=bool(self["use_mock_sdk"]),
+            use_mock_sdk=bool(self["fake"]),
         )
 
-    @lock
-    def __start__(self):
-        self.log.info("Starting QHY600 camera")
         self.drv.open()
 
     @lock
