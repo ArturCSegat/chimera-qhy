@@ -35,8 +35,6 @@ class QHY600(CameraBase):
     @lock
     def __start__(self):
         self.log.info("Starting QHY600 camera")
-        self.log.info(f"gain: {self["gain"]}")
-        self.log.info(f"fake: {self["fake"]}")
 
         self._current_readout_mode = self["readout_mode_index"]
 
