@@ -131,16 +131,14 @@ class QHY600MDriver:
             left, top, width, height = roi
             self.state.roi_left = max(0, int(left))
             self.state.roi_top = max(0, int(top))
-            self.state.roi_width = max(1, int(width))
-            self.state.roi_height = max(1, int(height))
+            self.state.roi_width = max(1, int(width // self.state.bin_factor))
+            self.state.roi_height = max(1, int(height // self.state.bin_factor))
         elif self.state.chip_info:
             self.state.roi_left = 0
             self.state.roi_top = 0
 
-            # ROI -> area of sensor used
-            # 2x2 binning should still use full sensor, but combine to quarter smaller image
-            self.state.roi_width = self.state.chip_info.image_width_px #// self.state.bin_factor
-            self.state.roi_height = self.state.chip_info.image_height_px # // self.state.bin_factor
+            self.state.roi_width = self.state.chip_info.image_width_px // self.state.bin_factor
+            self.state.roi_height = self.state.chip_info.image_height_px // self.state.bin_factor
 
         self.log.info(
             "Starting exposure: %.3fs (bin=%dx%d, roi=%d,%d %dx%d)",
