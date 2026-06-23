@@ -26,6 +26,9 @@ class Qhy600State:
     roi_width: int = 0
     roi_height: int = 0
 
+    cooling: bool = False
+    setpoint: float = 0.0
+
 
 class QHY600MDriver:
     """Driver layer (no ctypes)."""
@@ -215,3 +218,27 @@ class QHY600MDriver:
         if not self._sdk or not self.state.camera_handle:
             raise RuntimeError("Camera not open")
         return self._sdk.get_parameter(self.state.camera_handle, ControlId.TEMPERATURE_C)
+
+    def has_cooler(self) -> bool:
+        if not self._sdk or not self.state.camera_handle:
+            raise RuntimeError("Camera not open")
+        return self._sdk.is_control_available(self.state.camera_handle, ControlId.COOLER)
+
+    def start_cooling(self, temp_c: float) -> None:
+        if not self._sdk or not self.state.camera_handle:
+            raise RuntimeError("Camera not open")
+        self._sdk.set_parameter(self.state.camera_handle, ControlId.COOLER, float(temp_c))
+        self.state.cooling = True
+        self.state.setpoint = float(temp_c)
+
+    def stop_cooling(self) -> None:
+        if not self._sdk or not self.state.camera_handle:
+            raise RuntimeError("Camera not open")
+        self._sdk.set_parameter(self.state.camera_handle, ControlId.MANUAL_PWM, 0.0)
+        self.state.cooling = False
+
+    def is_cooling(self) -> bool:
+        return self.state.cooling
+
+    def get_set_point(self) -> float:
+        return self.state.setpoint

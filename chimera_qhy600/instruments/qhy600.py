@@ -5,7 +5,7 @@ import time
 
 from chimera.core.lock import lock
 from chimera.instruments.camera import CameraBase
-from chimera.interfaces.camera import CameraStatus, ReadoutMode
+from chimera.interfaces.camera import CameraFeature, CameraStatus, ReadoutMode
 
 from qhy600mdriver import QHY600MDriver
 
@@ -63,22 +63,41 @@ class QHY600(CameraBase):
 
         self.drv.open()
 
+        self._has_cooler = self.drv.has_cooler()
+        self.log.info("Camera has cooler: %s", self._has_cooler)
+
     @lock
     def __stop__(self):
         self.log.info("Stopping QHY600 camera")
         self.drv.close()
 
-    def is_cooling(self):
-        return False
+    @lock
+    def start_cooling(self, temp_c):
+        self.drv.start_cooling(float(temp_c))
+        return True
 
-    def is_fanning(self):
-        return False
+    @lock
+    def stop_cooling(self):
+        self.drv.stop_cooling()
+        return True
+
+    def is_cooling(self):
+        return self.drv.is_cooling()
 
     @lock
     def get_temperature(self):
         return self.drv.get_temperature()
 
+    @lock
+    def get_set_point(self):
+        return self.drv.get_set_point()
+
+    def is_fanning(self):
+        return self.drv.is_cooling()
+
     def supports(self, feature=None):
+        if feature == CameraFeature.TEMPERATURE_CONTROL:
+            return self._has_cooler
         return False
 
     def get_current_ccd(self):

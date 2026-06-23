@@ -21,6 +21,9 @@ class ControlId(IntEnum):
     GAIN = 6
     EXPOSURE_US = 8
     TEMPERATURE_C = 14
+    CURRENT_PWM = 15
+    MANUAL_PWM = 16
+    COOLER = 18
 
 
 class StreamMode(IntEnum):
@@ -140,6 +143,9 @@ class QhyCcdSdk:
             ctypes.c_uint32,
             ctypes.c_uint32,
         ]
+
+        self._lib.IsQHYCCDControlAvailable.restype = ctypes.c_uint32
+        self._lib.IsQHYCCDControlAvailable.argtypes = [ctypes.c_void_p, ctypes.c_int]
 
         # The plugin currently uses single-frame mode.
         self._lib.ExpQHYCCDSingleFrame.restype = ctypes.c_int
@@ -292,6 +298,11 @@ class QhyCcdSdk:
         if control_id not in ControlId:
             raise TypeError("control_id must be a ControlId")
         return float(self._lib.GetQHYCCDParam(self._as_handle(handle), int(control_id)))
+
+    def is_control_available(self, handle: int, control_id: ControlId) -> bool:
+        if control_id not in ControlId:
+            raise TypeError("control_id must be a ControlId")
+        return int(self._lib.IsQHYCCDControlAvailable(self._as_handle(handle), int(control_id))) == 0
 
     def set_binning(self, handle: int, bin_x: int, bin_y: int) -> None:
         self._check_success(

@@ -139,6 +139,10 @@ class QhyCcdSdkMock:
         print(f"[QhyCcdSdkMock] get_parameter(handle={handle}, control_id={control_id})")
         return float(self._cams[int(handle)].params.get(control_id, 0.0))
 
+    def is_control_available(self, handle: int, control_id: ControlId) -> bool:
+        print(f"[QhyCcdSdkMock] is_control_available(handle={handle}, control_id={control_id})")
+        return True
+
     def set_binning(self, handle: int, bin_x: int, bin_y: int) -> None:
         print(f"[QhyCcdSdkMock] set_binning(handle={handle}, bin_x={bin_x}, bin_y={bin_y})")
         cam = self._cams[int(handle)]
